@@ -11,16 +11,14 @@ def extract_image(audio_path, key, output_image):
 
     audio_samples = np.frombuffer(frames, dtype=np.int16)
 
-    def hash_func(msb, key):
-        return int(hashlib.sha256((str(msb)+key).encode()).hexdigest(),16)
+    def hash_func(index, key):
+        return int(hashlib.sha256((str(index)+key).encode()).hexdigest(),16)
 
     bits = []
 
-    for sample in audio_samples:
+    for i, sample in enumerate(audio_samples):
 
-        msb = (sample >> 8) & 0xFF
-
-        if hash_func(msb, key) % 10 == 0:
+        if hash_func(i, key) % 10 == 0:
 
             b1 = (sample >> 1) & 1
             b3 = (sample >> 3) & 1
