@@ -3,89 +3,84 @@ import wave
 import hashlib
 import cv2
 
-def extract_payload(audio_path, key, output_image):
+def bits_to_text(bits):
+    chars = []
+    for b in range(0, len(bits), 8):
+        byte = bits[b:b+8]
+        chars.append(chr(int(byte,2)))
+    return ''.join(chars)
 
-    wav = wave.open(audio_path, 'rb')
+
+def bits_to_bytes(bits):
+    byte_array = []
+    for b in range(0, len(bits), 8):
+        byte = bits[b:b+8]
+        byte_array.append(int(byte,2))
+    return bytes(byte_array)
+
+
+def extract_payload(stego_audio, key):
+
+    # read audio
+    wav = wave.open(stego_audio, 'rb')
     frames = wav.readframes(wav.getnframes())
     wav.close()
 
-    audio_samples = np.frombuffer(frames, dtype=np.int16)
+    samples = np.frombuffer(frames, dtype=np.int16)
 
-    def hash_func(msb, key):
-        return int(hashlib.sha256((str(msb) + key).encode()).hexdigest(), 16)
+    # extract LSB
+    bits = [str(sample & 1) for sample in samples]
+    bitstream = ''.join(bits)
 
-    payload_bits = []
+    pointer = 0
 
-    for sample in audio_samples:
+    # ---------------------------
+    # Extract TEXT
+    # ---------------------------
 
-        msb = (sample >> 8) & 0xFF
+    text_len_bits = bitstream[pointer:pointer+32]
+    text_len = int(text_len_bits,2)
+    pointer += 32
 
-        if hash_func(msb, key) % 10 == 0:
+    if text_len > 0:
 
-            b1 = (sample >> 1) & 1
-            b3 = (sample >> 3) & 1
+        text_bits = bitstream[pointer:pointer+text_len]
+        pointer += text_len
 
-            payload_bits.append(b1)
-            payload_bits.append(b3)
+        text = bits_to_text(text_bits)
 
-            # Stop after header first
-            if len(payload_bits) >= 72:
-                break
+        print("Hidden Text Found:")
+        print(text)
 
-    payload_bits = np.array(payload_bits, dtype=np.uint8)
+    else:
+        print("No hidden text found")
 
-    header_bits = payload_bits[:72]
 
-    mode = int("".join(map(str, header_bits[0:8])), 2)
-    img_len = int("".join(map(str, header_bits[8:40])), 2)
-    text_len = int("".join(map(str, header_bits[40:72])), 2)
+    # ---------------------------
+    # Extract IMAGE
+    # ---------------------------
 
-    required_bits = 72 + img_len + text_len
+    img_len_bits = bitstream[pointer:pointer+32]
+    img_len = int(img_len_bits,2)
+    pointer += 32
 
-    payload_bits = []
+    if img_len > 0:
 
-    for sample in audio_samples:
+        img_bits = bitstream[pointer:pointer+img_len]
 
-        msb = (sample >> 8) & 0xFF
+        img_bytes = bits_to_bytes(img_bits)
 
-        if hash_func(msb, key) % 10 == 0:
+        with open("recovered_image.png","wb") as f:
+            f.write(img_bytes)
 
-            b1 = (sample >> 1) & 1
-            b3 = (sample >> 3) & 1
+        print("Hidden image recovered as recovered_image.png")
 
-            payload_bits.append(b1)
-            payload_bits.append(b3)
+    else:
+        print("No hidden image found")
 
-            if len(payload_bits) >= required_bits:
-                break
 
-    payload_bits = np.array(payload_bits, dtype=np.uint8)
+# run
+stego_audio = input("Enter Stego Audio File: ")
+key = input("Enter Secret Key: ")
 
-    payload = payload_bits[72:72 + img_len + text_len]
-
-    if mode & 1:
-
-        img_bits = payload[:img_len]
-
-        img_bytes = np.packbits(img_bits)
-
-        image = img_bytes.reshape((64, 64))
-
-        cv2.imwrite(output_image, image)
-
-    message = ""
-
-    if mode & 2:
-
-        text_bits = payload[img_len:img_len + text_len]
-
-        chars = []
-
-        for i in range(0, len(text_bits), 8):
-            byte = text_bits[i:i+8]
-            byte = int("".join(map(str, byte)), 2)
-            chars.append(chr(byte))
-
-        message = "".join(chars)
-
-    return mode, message
+extract_payload(stego_audio, key)
