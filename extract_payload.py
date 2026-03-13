@@ -34,8 +34,9 @@ def extract_payload(audio_file,key,output_img):
     samples=np.frombuffer(frames,dtype=np.int16)
 
     bits=[]
+    pointer=0
 
-    # Extract bits from same positions used in transmitter
+    # STEP 1 — Extract only header (72 bits)
     for sample in samples:
 
         msb=(sample>>8)&0xFF
@@ -48,27 +49,50 @@ def extract_payload(audio_file,key,output_img):
             bits.append(str(bit1))
             bits.append(str(bit2))
 
+            if len(bits)>=72:
+                break
+
     bits=''.join(bits)
 
+    if len(bits)<72:
+        return 0,"No hidden data"
+
+    mode=int(bits[0:8],2)
+    img_len=int(bits[8:40],2)
+    text_len=int(bits[40:72],2)
+
+    required_bits=img_len+text_len
+
+    # STEP 2 — extract payload bits
+    payload_bits=[]
+    count=0
+
+    for sample in samples:
+
+        msb=(sample>>8)&0xFF
+
+        if hash_func(msb,key)%10==0:
+
+            bit1=(sample>>1)&1
+            bit2=(sample>>3)&1
+
+            payload_bits.append(str(bit1))
+            payload_bits.append(str(bit2))
+
+            count+=2
+
+            if count>=required_bits:
+                break
+
+    payload_bits=''.join(payload_bits)
+
     pointer=0
-
-    # Header
-    mode=int(bits[pointer:pointer+8],2)
-    pointer+=8
-
-    img_len=int(bits[pointer:pointer+32],2)
-    pointer+=32
-
-    text_len=int(bits[pointer:pointer+32],2)
-    pointer+=32
-
     message=""
     image_found=False
 
-    # IMAGE
     if img_len>0:
 
-        img_bits=bits[pointer:pointer+img_len]
+        img_bits=payload_bits[pointer:pointer+img_len]
         pointer+=img_len
 
         img_bytes=bits_to_bytes(img_bits)
@@ -78,10 +102,9 @@ def extract_payload(audio_file,key,output_img):
 
         image_found=True
 
-    # TEXT
     if text_len>0:
 
-        text_bits=bits[pointer:pointer+text_len]
+        text_bits=payload_bits[pointer:pointer+text_len]
         message=bits_to_text(text_bits)
 
     if image_found and message:
