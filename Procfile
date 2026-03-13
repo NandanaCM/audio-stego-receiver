@@ -1,1 +1,0 @@
-web: gunicorn receiver_server:app
