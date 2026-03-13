@@ -33,9 +33,16 @@ def extract_payload(audio_file, key, output_img):
 
     samples = np.frombuffer(frames, dtype=np.int16)
 
-    extracted_bits = []
+    header_bits = []
+    payload_bits = []
 
-    # Step 1: extract bits exactly as transmitter embedded
+    header_size = 72  # 8 + 32 + 32
+    pointer = 0
+
+    img_len = 0
+    text_len = 0
+    payload_needed = None
+
     for sample in samples:
 
         msb = (sample >> 8) & 0xFF
@@ -45,30 +52,40 @@ def extract_payload(audio_file, key, output_img):
             bit1 = (sample >> 1) & 1
             bit2 = (sample >> 3) & 1
 
-            extracted_bits.append(str(bit1))
-            extracted_bits.append(str(bit2))
+            for b in [bit1, bit2]:
 
-    bits = ''.join(extracted_bits)
+                # collect header first
+                if len(header_bits) < header_size:
+                    header_bits.append(str(b))
 
-    pointer = 0
+                    if len(header_bits) == header_size:
 
-    # HEADER
-    mode = int(bits[pointer:pointer+8], 2)
-    pointer += 8
+                        bits = ''.join(header_bits)
 
-    img_len = int(bits[pointer:pointer+32], 2)
-    pointer += 32
+                        mode = int(bits[0:8], 2)
+                        img_len = int(bits[8:40], 2)
+                        text_len = int(bits[40:72], 2)
 
-    text_len = int(bits[pointer:pointer+32], 2)
-    pointer += 32
+                        payload_needed = img_len + text_len
+
+                else:
+
+                    payload_bits.append(str(b))
+
+                    if len(payload_bits) >= payload_needed:
+                        break
+
+        if payload_needed and len(payload_bits) >= payload_needed:
+            break
 
     message = ""
     image_found = False
 
-    # IMAGE EXTRACTION
+    pointer = 0
+
     if img_len > 0:
 
-        img_bits = bits[pointer:pointer+img_len]
+        img_bits = payload_bits[pointer:pointer+img_len]
         pointer += img_len
 
         img_bytes = bits_to_bytes(img_bits)
@@ -78,12 +95,9 @@ def extract_payload(audio_file, key, output_img):
 
         image_found = True
 
-    # TEXT EXTRACTION
     if text_len > 0:
 
-        text_bits = bits[pointer:pointer+text_len]
-        pointer += text_len
-
+        text_bits = payload_bits[pointer:pointer+text_len]
         message = bits_to_text(text_bits)
 
     if image_found and message:
