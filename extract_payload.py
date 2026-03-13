@@ -1,86 +1,79 @@
 import numpy as np
 import wave
 import hashlib
-import cv2
+
 
 def bits_to_text(bits):
     chars = []
-    for b in range(0, len(bits), 8):
-        byte = bits[b:b+8]
-        chars.append(chr(int(byte,2)))
+    for i in range(0, len(bits), 8):
+        chars.append(chr(int(bits[i:i+8], 2)))
     return ''.join(chars)
 
 
 def bits_to_bytes(bits):
-    byte_array = []
-    for b in range(0, len(bits), 8):
-        byte = bits[b:b+8]
-        byte_array.append(int(byte,2))
-    return bytes(byte_array)
+    data = []
+    for i in range(0, len(bits), 8):
+        data.append(int(bits[i:i+8], 2))
+    return bytes(data)
 
 
-def extract_payload(stego_audio, key):
+def extract_payload(audio_file, key, output_img):
 
-    # read audio
-    wav = wave.open(stego_audio, 'rb')
+    wav = wave.open(audio_file, 'rb')
     frames = wav.readframes(wav.getnframes())
     wav.close()
 
     samples = np.frombuffer(frames, dtype=np.int16)
 
-    # extract LSB
-    bits = [str(sample & 1) for sample in samples]
-    bitstream = ''.join(bits)
+    bits = ''.join([str(sample & 1) for sample in samples])
 
     pointer = 0
 
-    # ---------------------------
-    # Extract TEXT
-    # ---------------------------
-
-    text_len_bits = bitstream[pointer:pointer+32]
-    text_len = int(text_len_bits,2)
+    # HASH
+    hash_len = int(bits[pointer:pointer+32], 2)
     pointer += 32
+
+    hash_bits = bits[pointer:pointer+hash_len]
+    pointer += hash_len
+
+    received_hash = bits_to_text(hash_bits)
+
+    # TEXT
+    text_len = int(bits[pointer:pointer+32], 2)
+    pointer += 32
+
+    message = ""
 
     if text_len > 0:
 
-        text_bits = bitstream[pointer:pointer+text_len]
+        text_bits = bits[pointer:pointer+text_len]
         pointer += text_len
 
-        text = bits_to_text(text_bits)
+        hidden_text = bits_to_text(text_bits)
 
-        print("Hidden Text Found:")
-        print(text)
+        verify_hash = hashlib.sha256(
+            (hidden_text + key).encode()
+        ).hexdigest()
 
-    else:
-        print("No hidden text found")
+        if verify_hash == received_hash:
+            message = hidden_text
+        else:
+            message = "Hash verification failed"
 
-
-    # ---------------------------
-    # Extract IMAGE
-    # ---------------------------
-
-    img_len_bits = bitstream[pointer:pointer+32]
-    img_len = int(img_len_bits,2)
+    # IMAGE
+    img_len = int(bits[pointer:pointer+32], 2)
     pointer += 32
+
+    mode = 0
 
     if img_len > 0:
 
-        img_bits = bitstream[pointer:pointer+img_len]
-
+        img_bits = bits[pointer:pointer+img_len]
         img_bytes = bits_to_bytes(img_bits)
 
-        with open("recovered_image.png","wb") as f:
+        with open(output_img, "wb") as f:
             f.write(img_bytes)
 
-        print("Hidden image recovered as recovered_image.png")
+        mode = 1
 
-    else:
-        print("No hidden image found")
-
-
-# run
-stego_audio = input("Enter Stego Audio File: ")
-key = input("Enter Secret Key: ")
-
-extract_payload(stego_audio, key)
+    return mode, message
