@@ -19,35 +19,35 @@ def home():
 def extract():
 
     try:
-        # get inputs
+
         audio = request.files["audio"]
         key = request.form["key"]
 
-        # file paths
         audio_path = os.path.join(UPLOAD, "stego.wav")
         output_img = os.path.join(UPLOAD, "recovered.png")
 
-        # save uploaded audio
         audio.save(audio_path)
 
-        # run extraction algorithm
         mode, message = extract_payload(audio_path, key, output_img)
 
-        # if image hidden → send image
-        if mode & 1 and os.path.exists(output_img):
+        if mode == 3:
+            return jsonify({
+                "text": message,
+                "image": True
+            })
+
+        if mode == 1:
             return send_file(output_img, mimetype="image/png")
 
-        # if only text hidden
-        if mode & 2:
-            return jsonify({"message": message})
+        if mode == 2:
+            return jsonify({"text": message})
 
-        return jsonify({"message": "No hidden data found"})
-
+        return jsonify({"text": "No hidden data found"})
 
     except Exception as e:
-        print("ERROR:", e)
         return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":
     app.run(port=5001, debug=True)
+
