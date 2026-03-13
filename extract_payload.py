@@ -21,6 +21,10 @@ def bits_to_bytes(bits):
     return bytes(data)
 
 
+def hash_func(msb,key):
+    return int(hashlib.sha256((str(msb)+key).encode()).hexdigest(),16)
+
+
 def extract_payload(audio_file,key,output_img):
 
     wav=wave.open(audio_file,'rb')
@@ -31,13 +35,9 @@ def extract_payload(audio_file,key,output_img):
 
     bits=[]
 
-    def hash_func(msb,key):
-        return int(hashlib.sha256((str(msb)+key).encode()).hexdigest(),16)
+    # Extract bits from same positions used in transmitter
+    for sample in samples:
 
-    # SPEED FIX: process every 50th sample
-    for i in range(0,len(samples),50):
-
-        sample=samples[i]
         msb=(sample>>8)&0xFF
 
         if hash_func(msb,key)%10==0:
@@ -52,9 +52,7 @@ def extract_payload(audio_file,key,output_img):
 
     pointer=0
 
-    if len(bits)<72:
-        return 0,"No hidden data"
-
+    # Header
     mode=int(bits[pointer:pointer+8],2)
     pointer+=8
 
@@ -67,7 +65,8 @@ def extract_payload(audio_file,key,output_img):
     message=""
     image_found=False
 
-    if img_len>0 and pointer+img_len<=len(bits):
+    # IMAGE
+    if img_len>0:
 
         img_bits=bits[pointer:pointer+img_len]
         pointer+=img_len
@@ -79,7 +78,8 @@ def extract_payload(audio_file,key,output_img):
 
         image_found=True
 
-    if text_len>0 and pointer+text_len<=len(bits):
+    # TEXT
+    if text_len>0:
 
         text_bits=bits[pointer:pointer+text_len]
         message=bits_to_text(text_bits)
@@ -93,4 +93,4 @@ def extract_payload(audio_file,key,output_img):
     if message:
         return 2,message
 
-    return 0,"No hidden data"
+    return 0,""
