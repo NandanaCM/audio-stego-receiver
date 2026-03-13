@@ -30,19 +30,22 @@ def extract():
 
         mode, message = extract_payload(audio_path, key, output_img)
 
+        # image + text
         if mode == 3:
             return jsonify({
-                "text": message,
+                "message": message,
                 "image": True
             })
 
+        # image only
         if mode == 1:
             return send_file(output_img, mimetype="image/png")
 
+        # text only
         if mode == 2:
-            return jsonify({"text": message})
+            return jsonify({"message": message})
 
-        return jsonify({"text": "No hidden data found"})
+        return jsonify({"message": "No hidden data found"})
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -50,4 +53,3 @@ def extract():
 
 if __name__ == "__main__":
     app.run(port=5001, debug=True)
-
