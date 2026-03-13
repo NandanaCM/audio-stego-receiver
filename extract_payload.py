@@ -1,6 +1,9 @@
-import numpy as np
 import wave
 import hashlib
+
+
+def hash_func(msb, key):
+    return int(hashlib.sha256((str(msb) + key).encode()).hexdigest(), 16)
 
 
 def bits_to_text(bits):
@@ -21,21 +24,23 @@ def bits_to_bytes(bits):
     return bytes(data)
 
 
-def hash_func(msb, key):
-    return int(hashlib.sha256((str(msb) + key).encode()).hexdigest(), 16)
-
-
 def extract_payload(audio_file, key, output_img):
 
     wav = wave.open(audio_file, 'rb')
-    frames = wav.readframes(wav.getnframes())
-    wav.close()
-
-    samples = np.frombuffer(frames, dtype=np.int16)
 
     extracted_bits = []
 
-    for sample in samples:
+    HEADER_SIZE = 72
+    payload_needed = None
+
+    while True:
+
+        frame = wav.readframes(1)
+
+        if not frame:
+            break
+
+        sample = int.from_bytes(frame[:2], byteorder='little', signed=True)
 
         msb = (sample >> 8) & 0xFF
 
@@ -47,12 +52,29 @@ def extract_payload(audio_file, key, output_img):
             extracted_bits.append(str(bit1))
             extracted_bits.append(str(bit2))
 
+            # once header is ready calculate payload size
+            if len(extracted_bits) == HEADER_SIZE:
+
+                bits = ''.join(extracted_bits)
+
+                mode = int(bits[0:8], 2)
+                img_len = int(bits[8:40], 2)
+                text_len = int(bits[40:72], 2)
+
+                payload_needed = HEADER_SIZE + img_len + text_len
+
+            # stop once payload extracted
+            if payload_needed and len(extracted_bits) >= payload_needed:
+                break
+
+    wav.close()
+
     bits = ''.join(extracted_bits)
 
-    pointer = 0
-
-    if len(bits) < 72:
+    if len(bits) < HEADER_SIZE:
         return 0, ""
+
+    pointer = 0
 
     mode = int(bits[pointer:pointer+8], 2)
     pointer += 8
