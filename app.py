@@ -1,9 +1,11 @@
 from flask import Flask, request, jsonify, send_file
+from flask_cors import CORS
 import os
 import cv2
 from extract_audio import extract_payload
 
 app = Flask(__name__)
+CORS(app)
 
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 
