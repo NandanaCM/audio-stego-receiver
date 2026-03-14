@@ -16,35 +16,47 @@ def home():
 
 @app.route("/extract", methods=["POST"])
 def extract():
+    try:
 
-    audio = request.files["audio"]
-    key = request.form["key"]
+        # check if audio exists
+        if "audio" not in request.files:
+            return jsonify({"error": "Audio file not provided"})
 
-    audio_path = os.path.join(UPLOAD, "input.wav")
-    audio.save(audio_path)
+        audio = request.files["audio"]
 
-    image, text = extract_payload(audio_path, key)
+        # check if key exists
+        key = request.form.get("key")
+        if not key:
+            return jsonify({"error": "Secret key not provided"})
 
-    result = {}
+        # save uploaded audio
+        audio_path = os.path.join(UPLOAD, "input.wav")
+        audio.save(audio_path)
 
-    # Save image if exists
-    if image is not None:
+        # run extraction algorithm
+        image, text = extract_payload(audio_path, key)
 
-        img_path = os.path.join(UPLOAD, "extracted.png")
-        cv2.imwrite(img_path, image)
+        result = {}
 
-        result["image_available"] = True
+        # handle extracted image
+        if image is not None:
+            img_path = os.path.join(UPLOAD, "extracted.png")
+            cv2.imwrite(img_path, image)
+            result["image_available"] = True
+        else:
+            result["image_available"] = False
 
-    else:
-        result["image_available"] = False
+        # handle extracted text
+        if text:
+            result["text"] = text
+        else:
+            result["text"] = ""
 
-    # Send text if exists
-    if text is not None:
-        result["text"] = text
-    else:
-        result["text"] = ""
+        return jsonify(result)
 
-    return jsonify(result)
+    except Exception as e:
+        # return actual error message
+        return jsonify({"error": str(e)})
 
 
 @app.route("/download_image")
@@ -55,7 +67,7 @@ def download_image():
     if os.path.exists(img_path):
         return send_file(img_path, as_attachment=True)
 
-    return "No image found"
+    return jsonify({"error": "No image found"})
 
 
 if __name__ == "__main__":
