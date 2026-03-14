@@ -5,6 +5,8 @@ from extract_audio import extract_payload
 
 app = Flask(__name__)
 
+app.config['MAX_CONTENT_LENGTH'] = 15 * 1024 * 1024
+
 UPLOAD = "uploads"
 os.makedirs(UPLOAD, exist_ok=True)
 
