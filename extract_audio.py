@@ -23,28 +23,41 @@ def bits_to_text(bits):
 def extract_payload(audio_path, key):
 
     wav = wave.open(audio_path, 'rb')
-    frames = wav.readframes(wav.getnframes())
-    wav.close()
-
-    audio_samples = np.frombuffer(frames, dtype=np.int16)
 
     extracted_bits = []
+
+    chunk_size = 4096
 
     def hash_func(msb, key):
         return int(hashlib.sha256((str(msb) + key).encode()).hexdigest(), 16)
 
-    # extract bits
-    for sample in audio_samples:
+    while True:
 
-        msb = (sample >> 8) & 0xFF
+        frames = wav.readframes(chunk_size)
 
-        if hash_func(msb, key) % 10 == 0:
+        if not frames:
+            break
 
-            bit1 = (sample >> 1) & 1
-            bit3 = (sample >> 3) & 1
+        audio_samples = np.frombuffer(frames, dtype=np.int16)
 
-            extracted_bits.append(bit1)
-            extracted_bits.append(bit3)
+        # convert stereo to mono if needed
+        if wav.getnchannels() == 2:
+            audio_samples = audio_samples.reshape(-1, 2)
+            audio_samples = audio_samples.mean(axis=1).astype(np.int16)
+
+        for sample in audio_samples:
+
+            msb = (sample >> 8) & 0xFF
+
+            if hash_func(msb, key) % 10 == 0:
+
+                bit1 = (sample >> 1) & 1
+                bit3 = (sample >> 3) & 1
+
+                extracted_bits.append(bit1)
+                extracted_bits.append(bit3)
+
+    wav.close()
 
     extracted_bits = np.array(extracted_bits)
 
@@ -66,7 +79,8 @@ def extract_payload(audio_path, key):
 
         img_bytes = np.packbits(img_bits)
 
-        image = img_bytes.reshape((64, 64))
+        if len(img_bytes) >= 4096:
+            image = img_bytes[:4096].reshape((64, 64))
 
     # TEXT
     if mode & 2:
