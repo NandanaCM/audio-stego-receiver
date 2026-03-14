@@ -42,10 +42,7 @@ def extract_payload(audio_path, key):
 
         samples = np.frombuffer(frames, dtype=np.int16)
 
-        # convert stereo to mono
-        if wav.getnchannels() == 2:
-            samples = samples.reshape(-1, 2)
-            samples = samples.mean(axis=1).astype(np.int16)
+        # DO NOT modify samples (important for hash matching)
 
         for sample in samples:
 
@@ -58,11 +55,12 @@ def extract_payload(audio_path, key):
 
                 for bit in [bit1, bit3]:
 
-                    # extract header first
                     if mode is None:
+
                         header_bits.append(bit)
 
                         if len(header_bits) == 72:
+
                             mode = int("".join(map(str, header_bits[0:8])), 2)
                             img_len = int("".join(map(str, header_bits[8:40])), 2)
                             text_len = int("".join(map(str, header_bits[40:72])), 2)
