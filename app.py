@@ -5,7 +5,7 @@ import cv2
 from extract_audio import extract_payload
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "https://securedatas.in"}})
 
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 
