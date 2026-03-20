@@ -5,9 +5,9 @@ import cv2
 from extract_audio import extract_payload
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "https://securedatas.in"}})
 
-app.config['MAX_CONTENT_LENGTH'] = 20 * 1024 * 1024  # ✅ reduced for safety
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 
 UPLOAD = "uploads"
 os.makedirs(UPLOAD, exist_ok=True)
@@ -21,28 +21,28 @@ def home():
 @app.route("/extract", methods=["POST"])
 def extract():
     try:
-        print("🔹 Request received")
 
+        # check if audio exists
         if "audio" not in request.files:
-            return jsonify({"error": "Audio file not provided"}), 400
+            return jsonify({"error": "Audio file not provided"})
 
         audio = request.files["audio"]
 
+        # check if key exists
         key = request.form.get("key")
         if not key:
-            return jsonify({"error": "Secret key not provided"}), 400
+            return jsonify({"error": "Secret key not provided"})
 
+        # save uploaded audio
         audio_path = os.path.join(UPLOAD, "input.wav")
         audio.save(audio_path)
 
-        print("🔹 File saved. Starting extraction...")
-
+        # run extraction algorithm
         image, text = extract_payload(audio_path, key)
-
-        print("🔹 Extraction completed")
 
         result = {}
 
+        # handle extracted image
         if image is not None:
             img_path = os.path.join(UPLOAD, "extracted.png")
             cv2.imwrite(img_path, image)
@@ -50,13 +50,17 @@ def extract():
         else:
             result["image_available"] = False
 
-        result["text"] = text if text else ""
+        # handle extracted text
+        if text:
+            result["text"] = text
+        else:
+            result["text"] = ""
 
         return jsonify(result)
 
     except Exception as e:
-        print("❌ ERROR:", str(e))
-        return jsonify({"error": str(e)}), 500
+        # return actual error message
+        return jsonify({"error": str(e)})
 
 
 @app.route("/download_image")
@@ -67,7 +71,7 @@ def download_image():
     if os.path.exists(img_path):
         return send_file(img_path, as_attachment=True)
 
-    return jsonify({"error": "No image found"}), 404
+    return jsonify({"error": "No image found"})
 
 
 if __name__ == "__main__":
